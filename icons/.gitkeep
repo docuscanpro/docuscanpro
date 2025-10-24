@@ -1,0 +1,18 @@
+# Ícones para PWA e favicon
+# Gere os ícones em diferentes tamanhos:
+
+# Tamanhos necessários:
+# - 72x72, 96x96, 128x128, 144x144
+# - 152x152, 192x192, 384x384, 512x512
+
+# Ferramentas para gerar ícones:
+# - https://realfavicongenerator.net/
+# - https://www.pwabuilder.com/imageGenerator
+
+# Nomenclatura recomendada:
+# icon-{size}x{size}.png
+# apple-touch-icon-{size}x{size}.png
+# favicon-{size}x{size}.png
+
+# Formatos suportados:
+# PNG (recomendado), ICO, SVG
