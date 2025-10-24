@@ -1,0 +1,21 @@
+# Scripts utilitários para desenvolvimento e produção
+
+# Estrutura sugerida:
+# scripts/
+# ├── dev/           # Scripts de desenvolvimento
+# ├── prod/          # Scripts de produção  
+# ├── db/            # Scripts de banco de dados
+# ├── backup/        # Scripts de backup
+# └── maintenance/   # Scripts de manutenção
+
+# Exemplos:
+# - setup-dev.sh (configura ambiente dev)
+# - backup-db.sh (backup do banco)
+# - cleanup-logs.sh (limpeza de logs)
+# - health-check.sh (verificação de saúde)
+
+# Boas práticas:
+# - Torne os scripts executáveis (chmod +x)
+# - Documente cada script
+# - Use shebang apropriado (#!/bin/bash)
+# - Valide dependências
