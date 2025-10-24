@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { base44 } from "@/api/base44Client";
+import { clientAPI } from "@/api/Client API";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,14 +16,20 @@ export default function Capture() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const [showCamera, setShowCamera] = useState(false);
+  const [cameraError, setCameraError] = useState(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const startCamera = async () => {
     try {
+      setCameraError(null);
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        },
         audio: false
       });
       streamRef.current = stream;
@@ -32,7 +38,9 @@ export default function Capture() {
       }
       setShowCamera(true);
     } catch (err) {
-      setError("Não foi possível acessar a câmera. Verifique as permissões.");
+      console.error("Erro na câmera:", err);
+      setCameraError("Não foi possível acessar a câmera. Verifique as permissões do navegador.");
+      setError("Erro na câmera: " + err.message);
     }
   };
 
@@ -42,27 +50,42 @@ export default function Capture() {
       streamRef.current = null;
     }
     setShowCamera(false);
+    setCameraError(null);
   };
 
   const capturePhoto = () => {
     if (!videoRef.current) return;
 
     const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
+    const video = videoRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(videoRef.current, 0, 0);
+    
+    // Desenhar o frame atual do vídeo
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     canvas.toBlob((blob) => {
-      const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      const file = new File([blob], `capture-${Date.now()}.jpg`, { 
+        type: 'image/jpeg',
+        lastModified: Date.now()
+      });
       handleFileSelect(file);
       stopCamera();
     }, 'image/jpeg', 0.9);
   };
 
   const handleFileSelect = (file) => {
+    if (!file) return;
+
     if (!file.type.startsWith('image/')) {
-      setError("Por favor, selecione apenas arquivos de imagem.");
+      setError("Por favor, selecione apenas arquivos de imagem (JPEG, PNG, etc.).");
+      return;
+    }
+
+    // Verificar tamanho do arquivo (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setError("O arquivo é muito grande. Tamanho máximo: 10MB.");
       return;
     }
 
@@ -72,6 +95,9 @@ export default function Capture() {
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreview(reader.result);
+    };
+    reader.onerror = () => {
+      setError("Erro ao ler o arquivo. Tente novamente.");
     };
     reader.readAsDataURL(file);
   };
@@ -83,25 +109,45 @@ export default function Capture() {
     setError(null);
 
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file: selectedFile });
+      const { file_url } = await clientAPI.integrations.Core.UploadFile({ file: selectedFile });
       
-      const document = await base44.entities.Document.create({
-        title: selectedFile.name,
+      const document = await clientAPI.entities.Document.create({
+        title: selectedFile.name.replace(/\.[^/.]+$/, ""), // Remove extensão
         original_image_url: file_url,
-        status: "completed"
+        status: "completed",
+        created_date: new Date().toISOString()
       });
 
       navigate(createPageUrl(`OCR?docId=${document.id}`));
     } catch (err) {
-      setError("Erro ao fazer upload. Tente novamente.");
-      console.error(err);
+      console.error("Erro no upload:", err);
+      setError("Erro ao fazer upload do arquivo. Verifique sua conexão e tente novamente.");
     } finally {
       setUploading(false);
     }
   };
 
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFileSelect(files[0]);
+    }
+  };
+
   React.useEffect(() => {
-    return () => stopCamera();
+    return () => {
+      if (streamRef.current) {
+        stopCamera();
+      }
+    };
   }, []);
 
   return (
@@ -129,7 +175,7 @@ export default function Capture() {
                 <Button
                   size="lg"
                   onClick={startCamera}
-                  className="h-32 bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
+                  className="h-32 bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white"
                 >
                   <div className="flex flex-col items-center gap-3">
                     <Camera className="w-8 h-8" />
@@ -137,17 +183,22 @@ export default function Capture() {
                   </div>
                 </Button>
 
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="h-32 border-2"
+                <div
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  className="border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors"
                 >
-                  <div className="flex flex-col items-center gap-3">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full h-32 border-0 flex flex-col items-center gap-3"
+                  >
                     <Upload className="w-8 h-8" />
                     <span className="text-lg">Fazer Upload</span>
-                  </div>
-                </Button>
+                    <span className="text-sm text-gray-500">ou arraste arquivos aqui</span>
+                  </Button>
+                </div>
 
                 <input
                   ref={fileInputRef}
@@ -157,6 +208,12 @@ export default function Capture() {
                   className="hidden"
                 />
               </div>
+            )}
+
+            {cameraError && (
+              <Alert variant="destructive">
+                <AlertDescription>{cameraError}</AlertDescription>
+              </Alert>
             )}
 
             {showCamera && (
@@ -169,17 +226,20 @@ export default function Capture() {
                     muted
                     className="w-full h-full object-cover"
                   />
+                  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-3">
+                    <Button onClick={capturePhoto} className="bg-white text-gray-900 hover:bg-gray-100">
+                      <Camera className="w-5 h-5 mr-2" />
+                      Capturar Foto
+                    </Button>
+                    <Button variant="outline" onClick={stopCamera} className="text-white border-white hover:bg-white/10">
+                      <X className="w-5 h-5 mr-2" />
+                      Cancelar
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-3">
-                  <Button onClick={capturePhoto} className="flex-1">
-                    <Camera className="w-5 h-5 mr-2" />
-                    Capturar Foto
-                  </Button>
-                  <Button variant="outline" onClick={stopCamera}>
-                    <X className="w-5 h-5 mr-2" />
-                    Cancelar
-                  </Button>
-                </div>
+                <p className="text-sm text-gray-600 text-center">
+                  Posicione o documento na câmera e clique em "Capturar Foto"
+                </p>
               </div>
             )}
 
@@ -195,7 +255,7 @@ export default function Capture() {
                     <img
                       src={preview}
                       alt="Preview"
-                      className="w-full rounded-lg shadow-md"
+                      className="w-full max-h-96 object-contain rounded-lg shadow-md bg-gray-100"
                     />
                     <Button
                       size="icon"
@@ -204,17 +264,18 @@ export default function Capture() {
                       onClick={() => {
                         setPreview(null);
                         setSelectedFile(null);
+                        setError(null);
                       }}
                     >
                       <X className="w-5 h-5" />
                     </Button>
                   </div>
 
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 flex-wrap">
                     <Button
                       onClick={handleUpload}
                       disabled={uploading}
-                      className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600"
+                      className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 text-white min-w-[200px]"
                     >
                       {uploading ? (
                         <>
@@ -228,13 +289,65 @@ export default function Capture() {
                         </>
                       )}
                     </Button>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setPreview(null);
+                        setSelectedFile(null);
+                      }}
+                      className="flex-1 min-w-[120px]"
+                    >
+                      <X className="w-5 h-5 mr-2" />
+                      Cancelar
+                    </Button>
                   </div>
+
+                  {selectedFile && (
+                    <div className="text-sm text-gray-600">
+                      <p><strong>Arquivo:</strong> {selectedFile.name}</p>
+                      <p><strong>Tamanho:</strong> {(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                      <p><strong>Tipo:</strong> {selectedFile.type}</p>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
           </CardContent>
         </Card>
+
+        {/* Dicas de uso */}
+        {!preview && !showCamera && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4"
+          >
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="p-4">
+                <h3 className="font-semibold text-blue-900 mb-2">💡 Dicas para Melhor Captura</h3>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Use boa iluminação</li>
+                  <li>• Mantenha a câmera estável</li>
+                  <li>• Enquadre todo o documento</li>
+                  <li>• Evite reflexos e sombras</li>
+                </ul>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-green-50 border-green-200">
+              <CardContent className="p-4">
+                <h3 className="font-semibold text-green-900 mb-2">📄 Formatos Suportados</h3>
+                <ul className="text-sm text-green-800 space-y-1">
+                  <li>• JPEG, PNG, WebP</li>
+                  <li>• Tamanho máximo: 10MB</li>
+                  <li>• Resolução recomendada: 1080p+</li>
+                </ul>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
       </motion.div>
     </div>
   );
-}
