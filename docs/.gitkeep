@@ -1,0 +1,17 @@
+# Documentação do projeto
+# Mantenha documentação técnica e de usuário aqui
+
+# Estrutura sugerida:
+# docs/
+# ├── api/           # Documentação da API
+# ├── user/          # Manual do usuário
+# ├── developer/     # Guia do desenvolvedor
+# ├── deployment/    # Instruções de deploy
+# └── images/        # Imagens para documentação
+
+# Formatos recomendados:
+# - Markdown (.md) para documentação
+# - PDF para manuais completos
+# - PNG/SVG para diagramas
+
+# Mantenha a documentação atualizada com cada release
