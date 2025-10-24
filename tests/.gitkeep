@@ -1,0 +1,20 @@
+# Testes automatizados da aplicação
+
+# Estrutura sugerida:
+# tests/
+# ├── unit/          # Testes unitários
+# ├── integration/   # Testes de integração
+# ├── e2e/           # Testes end-to-end
+# ├── fixtures/      # Dados de teste
+# └── reports/       # Relatórios de teste
+
+# Frameworks recomendados:
+# - Jest (JavaScript/React)
+# - Supertest (API testing)
+# - Cypress (E2E testing)
+# - React Testing Library
+
+# Configuração:
+# - Mantenha cobertura > 80%
+# - Execute testes no CI/CD
+# - Gere relatórios de cobertura
