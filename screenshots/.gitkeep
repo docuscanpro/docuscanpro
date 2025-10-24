@@ -1,0 +1,20 @@
+# Screenshots para a Web App Manifest
+# Adicione capturas de tela da aplicação em funcionamento
+
+# Tamanhos recomendados:
+# - 1280x720 (wide - desktop)
+# - 375x667 (narrow - mobile)
+# - 750x1334 (retina mobile)
+
+# Formato: PNG com transparência quando possível
+# Qualidade: Alta (mínimo 80% de qualidade)
+
+# Nomenclatura:
+# dashboard-{size}.png
+# mobile-{size}.png  
+# features-{size}.png
+
+# Use ferramentas como:
+# - Browser dev tools
+# - ScreenshotAPI
+# - Manual com dispositivos reais
