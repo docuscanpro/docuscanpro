@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { clientAPI } from "@/api/Client API";
 import {
   Camera,
   FileText,
@@ -21,7 +21,7 @@ import { motion } from "framer-motion";
 export default function Dashboard() {
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ['documents'],
-    queryFn: () => base44.entities.Document.list('-created_date', 10),
+    queryFn: () => clientAPI.entities.Document.list('-created_date', 10),
   });
 
   const features = [
