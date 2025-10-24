@@ -1,0 +1,20 @@
+# Este arquivo garante que o diretório uploads seja versionado no Git
+# Diretório para armazenar arquivos uploadados temporariamente
+
+# Estrutura esperada:
+# uploads/
+# ├── documents/     # Documentos processados
+# ├── signatures/    # Assinaturas salvas  
+# ├── temp/         # Arquivos temporários
+# └── exports/      # Arquivos exportados
+
+# Configurações:
+# - Os arquivos aqui são temporários e não devem ser versionados
+# - Configure backup regular se necessário
+# - Mantenha limpeza automática de arquivos antigos
+
+# Permissões recomendadas:
+# chmod 755 uploads/
+# chmod 644 uploads/* (para arquivos)
+
+# Nota: Adicione uploads/ ao .gitignore para evitar versionar arquivos de mídia
