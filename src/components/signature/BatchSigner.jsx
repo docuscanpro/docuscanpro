@@ -1,0 +1,239 @@
+import React, { useState } from "react";
+import { base44 } from "@/api/base44Client";
+import { useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Upload, Download, Loader2, CheckCircle2, Package } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+export default function BatchSigner({ signatures }) {
+  const queryClient = useQueryClient();
+  const [files, setFiles] = useState([]);
+  const [processing, setProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [results, setResults] = useState([]);
+  const [error, setError] = useState(null);
+
+  const handleFileSelect = (e) => {
+    const selectedFiles = Array.from(e.target.files);
+    setFiles(selectedFiles);
+    setResults([]);
+    setError(null);
+  };
+
+  const signAllDocuments = async () => {
+    if (files.length === 0 || signatures.length === 0) return;
+
+    setProcessing(true);
+    setError(null);
+    setProgress(0);
+    const signedDocs = [];
+
+    try {
+      const defaultSignature = signatures.find(s => s.is_default) || signatures[0];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setProgress(((i + 1) / files.length) * 100);
+
+        const reader = new FileReader();
+        const preview = await new Promise((resolve) => {
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(file);
+        });
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const img = new window.Image();
+        await new Promise((resolve) => {
+          img.onload = resolve;
+          img.src = preview;
+        });
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+
+        const signImg = new window.Image();
+        await new Promise((resolve) => {
+          signImg.onload = resolve;
+          signImg.src = defaultSignature.signature_data;
+        });
+
+        const signWidth = img.width * 0.3;
+        const signHeight = (signImg.height / signImg.width) * signWidth;
+        ctx.drawImage(
+          signImg,
+          img.width - signWidth - 20,
+          img.height - signHeight - 20,
+          signWidth,
+          signHeight
+        );
+
+        // Add timestamp
+        ctx.font = '12px Arial';
+        ctx.fillStyle = '#666';
+        ctx.fillText(
+          `Assinado em: ${new Date().toLocaleString('pt-BR')}`,
+          img.width - signWidth - 20,
+          img.height - signHeight - 30
+        );
+
+        const blob = await new Promise(resolve => {
+          canvas.toBlob(resolve, 'image/png');
+        });
+
+        const signedFile = new File([blob], `signed-${file.name}`, { type: 'image/png' });
+        const { file_url } = await base44.integrations.Core.UploadFile({ file: signedFile });
+
+        await base44.entities.Document.create({
+          title: `${file.name} (Assinado)`,
+          original_image_url: preview,
+          signature_url: file_url,
+          status: "completed"
+        });
+
+        signedDocs.push({
+          original: file.name,
+          url: file_url
+        });
+      }
+
+      setResults(signedDocs);
+      queryClient.invalidateQueries(['documents']);
+    } catch (err) {
+      setError("Erro ao assinar documentos. Tente novamente.");
+      console.error(err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const downloadAll = () => {
+    results.forEach((result, index) => {
+      setTimeout(() => {
+        const a = document.createElement('a');
+        a.href = result.url;
+        a.download = `signed-${result.original}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }, index * 100);
+    });
+  };
+
+  return (
+    <Card className="shadow-lg">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Package className="w-5 h-5" />
+          Assinatura em Lote
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {signatures.length === 0 && (
+          <Alert>
+            <AlertDescription>
+              Crie uma assinatura primeiro para usar a assinatura em lote.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div>
+          <input
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+            id="batch-sign-upload"
+            disabled={signatures.length === 0}
+          />
+          <label htmlFor="batch-sign-upload">
+            <Button
+              asChild
+              size="lg"
+              className="w-full h-24 cursor-pointer"
+              variant="outline"
+              disabled={signatures.length === 0}
+            >
+              <div className="flex flex-col items-center gap-2">
+                <Upload className="w-6 h-6" />
+                <span>Selecionar Múltiplos Documentos</span>
+                {files.length > 0 && (
+                  <span className="text-xs text-gray-500">
+                    {files.length} {files.length === 1 ? 'documento selecionado' : 'documentos selecionados'}
+                  </span>
+                )}
+              </div>
+            </Button>
+          </label>
+        </div>
+
+        {files.length > 0 && (
+          <div className="space-y-3">
+            <div className="max-h-48 overflow-y-auto border rounded-lg p-3 space-y-2">
+              {files.map((file, index) => (
+                <div key={index} className="flex items-center gap-2 text-sm p-2 bg-gray-50 rounded">
+                  <span className="flex-1 truncate">{file.name}</span>
+                  {results[index] && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                </div>
+              ))}
+            </div>
+
+            {processing && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Assinando documentos...
+                </div>
+                <Progress value={progress} />
+                <p className="text-xs text-gray-500 text-center">
+                  {Math.round(progress)}% concluído
+                </p>
+              </div>
+            )}
+
+            <Button
+              onClick={signAllDocuments}
+              disabled={processing || files.length === 0}
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600"
+            >
+              {processing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Assinando...
+                </>
+              ) : (
+                <>
+                  <Package className="w-4 h-4 mr-2" />
+                  Assinar {files.length} {files.length === 1 ? 'Documento' : 'Documentos'}
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+
+        {results.length > 0 && (
+          <div className="space-y-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-green-800 font-medium">
+              ✓ {results.length} {results.length === 1 ? 'documento assinado' : 'documentos assinados'}!
+            </p>
+            <Button onClick={downloadAll} className="w-full">
+              <Download className="w-4 h-4 mr-2" />
+              Baixar Todos os Documentos
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
