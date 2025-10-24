@@ -1,0 +1,23 @@
+{
+  "name": "Signature",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nome da assinatura"
+    },
+    "signature_data": {
+      "type": "string",
+      "description": "Dados da assinatura em base64"
+    },
+    "is_default": {
+      "type": "boolean",
+      "default": false,
+      "description": "Se é a assinatura padrão"
+    }
+  },
+  "required": [
+    "name",
+    "signature_data"
+  ]
+}

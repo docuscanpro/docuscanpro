@@ -1,0 +1,211 @@
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { base44 } from "@/api/base44Client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { FileText, Volume2, Copy, ArrowRight, Loader2, Check } from "lucide-react";
+import { motion } from "framer-motion";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+export default function OCR() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
+  const urlParams = new URLSearchParams(location.search);
+  const docId = urlParams.get('docId');
+
+  const [extractedText, setExtractedText] = useState("");
+  const [isReading, setIsReading] = useState(false);
+  const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  const { data: document, isLoading } = useQuery({
+    queryKey: ['document', docId],
+    queryFn: async () => {
+      if (!docId) return null;
+      const docs = await base44.entities.Document.filter({ id: docId });
+      return docs[0] || null;
+    },
+    enabled: !!docId,
+  });
+
+  const extractMutation = useMutation({
+    mutationFn: async () => {
+      const result = await base44.integrations.Core.InvokeLLM({
+        prompt: `Extraia todo o texto visível desta imagem. Mantenha a formatação e estrutura originais. Retorne apenas o texto extraído, sem comentários adicionais.`,
+        file_urls: [document.original_image_url],
+      });
+      return result;
+    },
+    onSuccess: async (text) => {
+      setExtractedText(text);
+      if (docId) {
+        await base44.entities.Document.update(docId, {
+          extracted_text: text,
+          detected_language: "pt-BR"
+        });
+        queryClient.invalidateQueries(['document', docId]);
+      }
+    },
+    onError: (err) => {
+      setError("Erro ao extrair texto. Tente novamente.");
+      console.error(err);
+    }
+  });
+
+  useEffect(() => {
+    if (document?.extracted_text) {
+      setExtractedText(document.extracted_text);
+    }
+  }, [document]);
+
+  const handleReadAloud = () => {
+    if (!extractedText) return;
+
+    if (isReading) {
+      window.speechSynthesis.cancel();
+      setIsReading(false);
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(extractedText);
+    utterance.lang = 'pt-BR';
+    utterance.onend = () => setIsReading(false);
+    
+    window.speechSynthesis.speak(utterance);
+    setIsReading(true);
+  };
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(extractedText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (!document && !isLoading) {
+    return (
+      <div className="p-4 md:p-8 max-w-4xl mx-auto">
+        <Alert>
+          <AlertDescription>
+            Nenhum documento selecionado. Por favor, capture uma imagem primeiro.
+          </AlertDescription>
+        </Alert>
+        <Button className="mt-4" onClick={() => navigate(createPageUrl("Capture"))}>
+          Capturar Imagem
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 md:p-8 max-w-4xl mx-auto">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-6"
+      >
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Extração de Texto (OCR)</h1>
+          <p className="text-gray-600">Extraia texto da imagem automaticamente</p>
+        </div>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {document && (
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle>Imagem Original</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <img
+                src={document.original_image_url}
+                alt={document.title}
+                className="w-full rounded-lg shadow-md"
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="shadow-lg">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Texto Extraído
+              </CardTitle>
+              {!extractedText && (
+                <Button
+                  onClick={() => extractMutation.mutate()}
+                  disabled={extractMutation.isPending}
+                  className="bg-gradient-to-r from-purple-600 to-pink-600"
+                >
+                  {extractMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Extraindo...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-4 h-4 mr-2" />
+                      Extrair Texto
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Textarea
+              value={extractedText}
+              onChange={(e) => setExtractedText(e.target.value)}
+              placeholder="O texto extraído aparecerá aqui..."
+              className="min-h-[300px] text-base"
+              disabled={extractMutation.isPending}
+            />
+
+            {extractedText && (
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  onClick={handleReadAloud}
+                  variant={isReading ? "destructive" : "outline"}
+                >
+                  <Volume2 className="w-4 h-4 mr-2" />
+                  {isReading ? "Parar Leitura" : "Ler em Voz Alta"}
+                </Button>
+
+                <Button onClick={handleCopy} variant="outline">
+                  {copied ? (
+                    <>
+                      <Check className="w-4 h-4 mr-2" />
+                      Copiado!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copiar Texto
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  onClick={() => navigate(createPageUrl(`Translate?docId=${docId}`))}
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 ml-auto"
+                >
+                  Traduzir Texto
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+    </div>
+  );
+}
