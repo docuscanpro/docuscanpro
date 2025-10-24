@@ -1,0 +1,23 @@
+# Diretório para arquivos de log da aplicação
+# Mantido vazio no repositório - logs são gerados em produção
+
+# Estrutura:
+# logs/
+# ├── access.log    # Logs de acesso
+# ├── error.log     # Logs de erro
+# ├── combined.log  # Logs combinados
+# └── audit/        # Logs de auditoria
+#     ├── security.log
+#     └── actions.log
+
+# Configuração de rotação recomendada (usando logrotate):
+# /path/to/logs/*.log {
+#   daily
+#   rotate 7
+#   compress
+#   delaycompress
+#   missingok
+#   notifempty
+# }
+
+# Nota: Adicione logs/*.log ao .gitignore
